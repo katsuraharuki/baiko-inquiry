@@ -54,7 +54,7 @@
 <header>
   <div><div class="gold">BAIKO GAKUIN</div><h1>お問い合わせ管理</h1></div>
   <div class="me">対応者
-    <select id="staff" disabled><option>重村</option></select>
+    <select id="staff"><option>重村</option><option>事務室</option></select>
   </div>
 </header>
 <div class="stats" id="stats"></div>
@@ -68,7 +68,7 @@
 <script>
 // 定型文：よく返す答えをワンタップで入れる（本番は学校で文面を決める）
 const TEMPLATES = {
-  'お礼': 'お問い合わせありがとうございます。梅光学院の重村です。\n',
+  'お礼': 'お問い合わせありがとうございます。梅光学院です。\n',
   '説明会の案内': '11月7日・11月28日の入試説明会で、詳しくご説明しております。公式LINEのメニュー「説明会の申込」からお申し込みください。\n',
   '確認して連絡': '担当者に確認のうえ、改めてご連絡いたします。少々お待ちください。\n',
   '締め': '\nほかにもご不明な点がありましたら、この画面からお気軽にご質問ください。',
@@ -107,7 +107,7 @@ function renderDetail(q) {
     </dl>
     <div class="tools">
       <span class="badge ${q.status}">${q.status}</span>
-      <span class="muted">担当 重村</span>
+      <select id="assignee"><option value="">担当者なし</option>${['重村', '事務室'].map((n) => `<option ${q.assignee === n ? 'selected' : ''}>${n}</option>`).join('')}</select>
       ${q.status === '未対応' ? '<button class="btn small ghost" id="take">自分が対応する</button>' : ''}
     </div>
     <div class="thread">${q.messages.map((m) => m.from === 'user'
@@ -123,6 +123,7 @@ function renderDetail(q) {
       </div>
     </div>`;
   const reply = document.getElementById('reply');
+  document.getElementById('assignee').onchange = (e) => Store.update(q.id, { assignee: e.target.value });
   const take = document.getElementById('take');
   if (take) take.onclick = () => Store.update(q.id, { status: '対応中', assignee: staffSel.value });
   d.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { reply.value += TEMPLATES[b.dataset.t]; reply.focus(); }));
