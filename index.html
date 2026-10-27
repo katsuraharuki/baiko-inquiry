@@ -58,17 +58,6 @@
 // ── config.js に LIFF_ID があれば LIFF でLINEのIDと名前を取る。無ければデモの利用者で動く
 const CATEGORIES = ['入試・説明会', '学費・奨学金', '学校生活・部活', '通学・寮', 'その他'];
 const ROLES = ['保護者', '中学生', 'その他'];
-// よくある質問：送る前に見せて、自己解決できる分を減らす（本番は学校の確認済みの文に差し替える）
-const FAQ = {
-  '入試・説明会': [
-    ['11月の入試説明会はいつですか？', '11月7日と11月28日に開催します。公式LINEのメニュー「説明会の申込」からお申し込みいただけます。'],
-    ['説明会は保護者だけの参加でもいいですか？', '（学校の回答を入れる）'],
-  ],
-  '学費・奨学金': [['学費の目安を知りたいです', '公式LINEの特典「学費まるごとガイド」にまとめています。メニューからご覧ください。']],
-  '学校生活・部活': [['どんな部活がありますか？', '（学校の回答を入れる）']],
-  '通学・寮': [['スクールバスはありますか？', '（学校の回答を入れる）']],
-  'その他': [],
-};
 
 let me = { userId: 'demo-user', displayName: 'デモ 保護者' };
 let tab = 'new', openId = null, form = { category: '', role: '' };
@@ -104,7 +93,6 @@ function render() {
 }
 
 function renderForm(v) {
-  const faq = FAQ[form.category] || [];
   v.innerHTML = `
     <div class="card">
       <h2 style="font-size:17px">ご質問を送る</h2>
@@ -112,7 +100,6 @@ function renderForm(v) {
 
       <label>内容の種類<span class="req">必須</span></label>
       <div class="chips">${CATEGORIES.map((c) => `<button class="chip ${form.category === c ? 'on' : ''}" data-cat="${c}">${c}</button>`).join('')}</div>
-      ${faq.length ? `<div class="faq"><b>よくある質問</b>${faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><div>${esc(a)}</div></details>`).join('')}</div>` : ''}
 
       <label>お名前<span class="req">必須</span></label>
       <input id="name" placeholder="例）梅光 花子" value="${esc(form.name || '')}">
