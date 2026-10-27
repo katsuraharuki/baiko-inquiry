@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>梅光学院 お問い合わせ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Shippori+Mincho:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  header { background: var(--navy); color: #fff; padding: 18px 16px 14px; }
+  header .school { font-size: 12px; color: var(--gold); letter-spacing: .2em; }
+  header h1 { font-size: 20px; }
+  nav { display: flex; background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  nav button { flex: 1; padding: 12px; border: 0; background: none; color: var(--muted); border-bottom: 3px solid transparent; }
+  nav button.on { color: var(--navy); font-weight: 700; border-bottom-color: var(--gold); }
+  main { padding: 16px; max-width: 560px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  label { display: block; font-size: 13px; font-weight: 700; margin: 14px 0 6px; }
+  label .req { color: var(--warn); font-size: 11px; margin-left: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 14px; }
+  .chip.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .faq { background: var(--gold-soft); border-radius: 10px; padding: 12px 14px; margin-top: 12px; font-size: 14px; }
+  .faq b { font-family: var(--mincho); color: var(--navy); }
+  .faq details { margin-top: 6px; }
+  .faq summary { cursor: pointer; }
+  .item { display: block; width: 100%; text-align: left; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+  .item .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .item .preview { margin: 6px 0 0; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .back { background: none; border: 0; color: var(--navy); padding: 0; margin-bottom: 12px; }
+  .reply-box { margin-top: 16px; display: flex; gap: 8px; }
+  .reply-box textarea { min-height: 48px; }
+  .reply-box .btn { width: 84px; }
+  .done { text-align: center; padding: 28px 16px; }
+  .done .mark { font-size: 40px; color: var(--gold); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); background: #fff; border: 1px solid var(--line); border-left: 4px solid #06c755; border-radius: 10px; padding: 10px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.12); font-size: 13px; width: min(92vw, 420px); display: none; z-index: 9; }
+  .toast b { color: #06c755; }
+</style>
+</head>
+<body>
+<header>
+  <div class="school">BAIKO GAKUIN</div>
+  <h1>お問い合わせ</h1>
+</header>
+<nav>
+  <button data-tab="new" class="on">質問する</button>
+  <button data-tab="list">これまでの質問 <span id="unread"></span></button>
+</nav>
+<main id="view"></main>
+<div class="toast" id="toast"></div>
+
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script src="config.js"></script>
+<script src="store.js"></script>
+<script>
+// ── config.js に LIFF_ID があれば LIFF でLINEのIDと名前を取る。無ければデモの利用者で動く
+const CATEGORIES = ['入試・説明会', '学費・奨学金', '学校生活・部活', '通学・寮', 'その他'];
+const ROLES = ['保護者', '中学生', 'その他'];
+// よくある質問：送る前に見せて、自己解決できる分を減らす（本番は学校の確認済みの文に差し替える）
+const FAQ = {
+  '入試・説明会': [
+    ['11月の入試説明会はいつですか？', '11月7日と11月28日に開催します。公式LINEのメニュー「説明会の申込」からお申し込みいただけます。'],
+    ['説明会は保護者だけの参加でもいいですか？', '（学校の回答を入れる）'],
+  ],
+  '学費・奨学金': [['学費の目安を知りたいです', '公式LINEの特典「学費まるごとガイド」にまとめています。メニューからご覧ください。']],
+  '学校生活・部活': [['どんな部活がありますか？', '（学校の回答を入れる）']],
+  '通学・寮': [['スクールバスはありますか？', '（学校の回答を入れる）']],
+  'その他': [],
+};
+
+let me = { userId: 'demo-user', displayName: 'デモ 保護者' };
+let tab = 'new', openId = null, form = { category: '', role: '' };
+
+async function initLiff() {
+  const liffId = window.APP_CONFIG?.LIFF_ID;
+  if (!Store.remote || !liffId || !window.liff) return;
+  try {
+    await liff.init({ liffId });
+    if (!liff.isLoggedIn()) { liff.login(); return new Promise(() => {}); }
+    const p = await liff.getProfile();
+    me = { userId: p.userId, displayName: p.displayName };
+    Store.setAuth({ idToken: liff.getIDToken() });
+    await Store.refresh();
+    // 職員の回答を拾う（開いている間は20秒ごと、画面に戻った時も）
+    setInterval(() => Store.refresh().catch(() => {}), 20000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) Store.refresh().catch(() => {}); });
+  } catch (e) {
+    document.getElementById('view').innerHTML = `<div class="empty">LINEとの接続に失敗しました。<br>公式LINEのメニューから開き直してください。<br><span class="muted">${esc(e.message)}</span></div>`;
+    return new Promise(() => {});
+  }
+}
+
+function render() {
+  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+  const mine = Store.byUser(me.userId);
+  const unread = mine.filter((q) => q.unreadForUser).length;
+  document.getElementById('unread').innerHTML = unread ? '<span class="dot"></span>' : '';
+  const v = document.getElementById('view');
+  if (openId) return renderDetail(v, Store.get(openId));
+  if (tab === 'list') return renderList(v, mine);
+  renderForm(v);
+}
+
+function renderForm(v) {
+  const faq = FAQ[form.category] || [];
+  v.innerHTML = `
+    <div class="card">
+      <h2 style="font-size:17px">ご質問を送る</h2>
+      <p class="muted" style="margin:4px 0 0">担当の教職員がこの画面で回答します。回答が届くと公式LINEでお知らせします。</p>
+
+      <label>内容の種類<span class="req">必須</span></label>
+      <div class="chips">${CATEGORIES.map((c) => `<button class="chip ${form.category === c ? 'on' : ''}" data-cat="${c}">${c}</button>`).join('')}</div>
+      ${faq.length ? `<div class="faq"><b>よくある質問</b>${faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><div>${esc(a)}</div></details>`).join('')}</div>` : ''}
+
+      <label>お名前<span class="req">必須</span></label>
+      <input id="name" placeholder="例）梅光 花子" value="${esc(form.name || '')}">
+
+      <label>立場<span class="req">必須</span></label>
+      <div class="chips">${ROLES.map((r) => `<button class="chip ${form.role === r ? 'on' : ''}" data-role="${r}">${r}</button>`).join('')}</div>
+
+      <label>中学校名（任意）</label>
+      <input id="school" placeholder="例）下関市立〇〇中学校" value="${esc(form.school || '')}">
+
+      <label>ご質問<span class="req">必須</span></label>
+      <textarea id="text" placeholder="気になることを、そのままお書きください">${esc(form.text || '')}</textarea>
+    </div>
+    <button class="btn" id="send">送信する</button>`;
+  const keep = () => ['name', 'school', 'text'].forEach((k) => (form[k] = document.getElementById(k).value));
+  const check = () => {
+    keep();
+    document.getElementById('send').disabled = !(form.category && form.role && form.name.trim() && form.text.trim());
+  };
+  v.querySelectorAll('[data-cat]').forEach((b) => (b.onclick = () => { keep(); form.category = b.dataset.cat; render(); }));
+  v.querySelectorAll('[data-role]').forEach((b) => (b.onclick = () => { keep(); form.role = b.dataset.role; render(); }));
+  v.querySelectorAll('input, textarea').forEach((el) => (el.oninput = check));
+  check();
+  document.getElementById('send').onclick = () => {
+    keep();
+    const q = Store.create({ ...me, name: form.name.trim(), role: form.role, school: form.school.trim(), category: form.category, text: form.text.trim() });
+    form = { category: '', role: '' };
+    v.innerHTML = `
+      <div class="card done">
+        <div class="mark">✓</div>
+        <h2 style="font-size:18px">送信しました</h2>
+        <p>受付番号 <b>${q.id}</b></p>
+        <p class="muted">回答が届いたら、公式LINEでお知らせします。<br>「これまでの質問」からいつでも確認できます。</p>
+      </div>
+      <button class="btn ghost" id="toList">これまでの質問を見る</button>`;
+    document.getElementById('toList').onclick = () => { tab = 'list'; render(); };
+  };
+}
+
+function renderList(v, mine) {
+  if (!mine.length) { v.innerHTML = '<div class="empty">まだ質問はありません</div>'; return; }
+  v.innerHTML = mine.map((q) => `
+    <button class="item" data-id="${q.id}">
+      <div class="top">
+        <span class="muted">${esc(q.category)}・${fmt(q.updatedAt)}</span>
+        <span>${q.unreadForUser ? '<span class="dot"></span> ' : ''}<span class="badge ${q.status === '回答済み' ? '回答済み' : '対応中'}">${q.status === '回答済み' ? '回答あり' : '回答待ち'}</span></span>
+      </div>
+      <p class="preview">${esc(q.messages[0].text)}</p>
+    </button>`).join('');
+  v.querySelectorAll('.item').forEach((b) => (b.onclick = () => { openId = b.dataset.id; Store.update(openId, { unreadForUser: false }); render(); }));
+}
+
+function renderDetail(v, q) {
+  if (!q) { openId = null; return render(); }
+  v.innerHTML = `
+    <button class="back" id="back">← 一覧に戻る</button>
+    <div class="card" style="padding:12px 16px">
+      <div class="muted">受付番号 ${q.id}・${esc(q.category)}</div>
+    </div>
+    <div class="thread">${q.messages.map((m) => m.from === 'user'
+      ? `<div class="msg user">${esc(m.text)}<span class="meta">${fmt(m.at)}</span></div>`
+      : `<div class="msg staff"><span class="who">梅光学院 ${esc(m.staffName || '')}</span>${esc(m.text)}<span class="meta">${fmt(m.at)}</span></div>`).join('')}
+    </div>
+    <div class="reply-box">
+      <textarea id="more" placeholder="追加で質問する"></textarea>
+      <button class="btn" id="sendMore">送る</button>
+    </div>`;
+  document.getElementById('back').onclick = () => { openId = null; render(); };
+  document.getElementById('sendMore').onclick = () => {
+    const t = document.getElementById('more').value.trim();
+    if (t) Store.addMessage(q.id, { from: 'user', text: t });
+  };
+}
+
+// 職員が回答した瞬間に「LINEに届く通知」を再現する（本番は Messaging API のプッシュ）
+let seen = new Set(Store.byUser(me.userId).filter((q) => q.unreadForUser).map((q) => q.id + q.updatedAt));
+function notify() {
+  Store.byUser(me.userId).filter((q) => q.unreadForUser).forEach((q) => {
+    const k = q.id + q.updatedAt;
+    if (seen.has(k)) return;
+    seen.add(k);
+    const t = document.getElementById('toast');
+    t.innerHTML = `<b>LINE</b>　梅光学院<br>お問い合わせ（${q.id}）に回答が届きました。タップして確認してください。`;
+    t.style.display = 'block';
+    t.onclick = () => { t.style.display = 'none'; openId = q.id; Store.update(q.id, { unreadForUser: false }); };
+    setTimeout(() => (t.style.display = 'none'), 6000);
+  });
+}
+
+document.querySelectorAll('nav button').forEach((b) => (b.onclick = () => { tab = b.dataset.tab; openId = null; render(); }));
+window.addEventListener('store-changed', () => {
+  if (document.activeElement?.tagName === 'TEXTAREA' || document.activeElement?.tagName === 'INPUT') {
+    if (!openId && tab === 'new') return notify(); // 入力中のフォームは描き直さない
+  }
+  notify(); render();
+});
+initLiff().then(render);
+</script>
+</body>
+</html>
